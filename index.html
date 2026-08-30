@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>日程調整メール文メーカー</title>
+  <style>
+    :root {
+      --bg: #E4E1F2;
+      --surface: #FFFFFF;
+      --text: #2E2B3D;
+      --muted: #6E6A82;
+      --accent: #4B3F87;
+      --danger: #D93025;
+      --border: #D8D4EA;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      min-width: 320px;
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+    }
+
+    main {
+      width: min(100%, 560px);
+      margin: 0 auto;
+      padding: 24px 16px;
+    }
+
+    .app-card {
+      padding: 24px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.4;
+    }
+
+    .lead {
+      margin: 8px 0 24px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    h2 {
+      margin: 0 0 8px;
+      font-size: 16px;
+    }
+
+    .section-note {
+      margin: 0 0 16px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .candidate-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .candidate-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: end;
+      padding: 8px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+
+    .field {
+      display: grid;
+      flex: 1 1 150px;
+      gap: 4px;
+    }
+
+    label {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    input,
+    textarea,
+    button {
+      font: inherit;
+      font-size: 16px;
+    }
+
+    input,
+    textarea {
+      width: 100%;
+      min-height: 44px;
+      padding: 8px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface);
+      color: var(--text);
+    }
+
+    input:focus,
+    textarea:focus,
+    button:focus-visible {
+      outline: 3px solid #B7B0DB;
+      outline-offset: 2px;
+    }
+
+    button {
+      min-height: 44px;
+      padding: 8px 16px;
+      border: 1px solid var(--accent);
+      border-radius: 6px;
+      background: var(--surface);
+      color: var(--accent);
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    button:hover { background: #F2F0FB; }
+    button:disabled { cursor: not-allowed; opacity: .55; }
+
+    .remove-button { flex: 0 0 auto; }
+    .button-row { display: flex; flex-wrap: wrap; gap: 8px; }
+
+    .add-button { margin-top: 16px; }
+
+    .primary-button,
+    .copy-button {
+      width: 100%;
+      margin-top: 24px;
+      background: var(--accent);
+      color: var(--surface);
+    }
+
+    .primary-button:hover,
+    .copy-button:hover { background: #3E3370; }
+
+    .error,
+    .feedback {
+      min-height: 22px;
+      margin: 8px 0 0;
+      font-size: 14px;
+    }
+
+    .error { color: var(--danger); }
+    .feedback { color: var(--accent); }
+
+    .preview-section { margin-top: 24px; }
+
+    textarea {
+      min-height: 224px;
+      resize: vertical;
+      line-height: 1.7;
+    }
+
+    @media (max-width: 374px) {
+      main { padding: 16px 8px; }
+      .app-card { padding: 16px 8px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="app-card" aria-labelledby="page-title">
+      <header>
+        <h1 id="page-title">日程調整メール文メーカー</h1>
+        <p class="lead">候補日を入れると、曜日付きの丁寧なメール文がすぐできます</p>
+      </header>
+
+      <section aria-labelledby="candidate-title">
+        <h2 id="candidate-title">候補日時</h2>
+        <p class="section-note">日付と時間帯を入力してください。最大5件まで追加できます。</p>
+        <div id="candidate-list" class="candidate-list"></div>
+        <div class="button-row add-button">
+          <button id="add-button" type="button">候補を追加</button>
+        </div>
+        <p id="error-message" class="error" role="alert" aria-live="assertive"></p>
+        <button id="generate-button" class="primary-button" type="button">メール文を作る</button>
+      </section>
+
+      <section class="preview-section" aria-labelledby="preview-title">
+        <h2 id="preview-title">メール文プレビュー</h2>
+        <textarea id="email-preview" aria-label="生成されたメール文" placeholder="候補日時を入力して「メール文を作る」を押してください。" readonly></textarea>
+        <button id="copy-button" class="copy-button" type="button">コピーする</button>
+        <p id="copy-feedback" class="feedback" aria-live="polite"></p>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    const maxCandidates = 5;
+    const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
+    const candidateList = document.getElementById("candidate-list");
+    const addButton = document.getElementById("add-button");
+    const generateButton = document.getElementById("generate-button");
+    const preview = document.getElementById("email-preview");
+    const errorMessage = document.getElementById("error-message");
+    const copyButton = document.getElementById("copy-button");
+    const copyFeedback = document.getElementById("copy-feedback");
+
+    function createCandidateRow() {
+      const row = document.createElement("div");
+      row.className = "candidate-row";
+      row.innerHTML = `
+        <div class="field">
+          <label>日付
+            <input class="candidate-date" type="date" aria-label="候補日">
+          </label>
+        </div>
+        <div class="field">
+          <label>時間帯
+            <input class="candidate-time" type="time" aria-label="候補時刻">
+          </label>
+        </div>
+        <button class="remove-button" type="button">削除</button>
+      `;
+      row.querySelector(".remove-button").addEventListener("click", () => {
+        row.remove();
+        updateCandidateControls();
+      });
+      candidateList.appendChild(row);
+      updateCandidateControls();
+    }
+
+    function updateCandidateControls() {
+      const rows = candidateList.querySelectorAll(".candidate-row");
+      addButton.disabled = rows.length >= maxCandidates;
+      rows.forEach((row) => {
+        row.querySelector(".remove-button").disabled = rows.length === 1;
+      });
+    }
+
+    function formatCandidate(dateValue, timeValue) {
+      const [year, month, day] = dateValue.split("-").map(Number);
+      const localDate = new Date(year, month - 1, day);
+      return `・${month}月${day}日（${weekdays[localDate.getDay()]}）${timeValue}〜`;
+    }
+
+    function getCompletedCandidates() {
+      return [...candidateList.querySelectorAll(".candidate-row")]
+        .map((row) => ({
+          date: row.querySelector(".candidate-date").value,
+          time: row.querySelector(".candidate-time").value
+        }))
+        .filter((candidate) => candidate.date && candidate.time);
+    }
+
+    function buildEmail(candidates) {
+      const dates = candidates
+        .map((candidate) => formatCandidate(candidate.date, candidate.time))
+        .join("\n");
+      return `お世話になっております。\n\nお打ち合わせの日程につきまして、下記日程でご都合いかがでしょうか。\n\n${dates}\n\nご都合のよい日時をお知らせいただけますと幸いです。\n\nお忙しいところ恐れ入りますが、何卒よろしくお願いいたします。`;
+    }
+
+    addButton.addEventListener("click", createCandidateRow);
+
+    generateButton.addEventListener("click", () => {
+      const candidates = getCompletedCandidates();
+      copyFeedback.textContent = "";
+      if (candidates.length === 0) {
+        preview.value = "";
+        errorMessage.textContent = "日付と時間帯が入力された候補を1件以上追加してください。";
+        return;
+      }
+      errorMessage.textContent = "";
+      preview.value = buildEmail(candidates);
+    });
+
+    async function copyPreview() {
+      if (!preview.value) {
+        copyFeedback.textContent = "先にメール文を作ってください。";
+        return;
+      }
+
+      try {
+        await navigator.clipboard.writeText(preview.value);
+        copyFeedback.textContent = "コピーしました。";
+      } catch (error) {
+        preview.focus();
+        preview.select();
+        copyFeedback.textContent = "コピーできなかったため、本文を選択しました。コピーしてください。";
+      }
+    }
+
+    copyButton.addEventListener("click", copyPreview);
+    createCandidateRow();
+  </script>
+</body>
+</html>
